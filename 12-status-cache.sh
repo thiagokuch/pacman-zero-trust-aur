@@ -113,19 +113,19 @@ show_snapshot() {
 # =====================================================
 
 clean_cache() {
-
-    log_info "Cleaning cache"
-
-    rm -rf "$CACHE_DIR"/*
-
-    find "$HOME/.cache" \
-        -name "*.pkg.tar*" \
-        -mtime +30 \
-        -delete
-
-    log_success "Cache cleaned"
-
+    log_message "INFO" "Starting system cache cleanup..."
+    if command -v paccache &> /dev/null; then
+        echo "Removing uninstalled packages from cache (keeping last 2 versions)..."
+        sudo paccache -r
+        echo "Removing all cached versions of uninstalled packages..."
+        sudo paccache -rk0
+        log_message "SUCCESS" "Package cache cleanup complete using paccache."
+    else
+        sudo pacman -Sc --noconfirm
+        log_message "SUCCESS" "Package cache cleanup complete using pacman -Sc."
+    fi
 }
+
 
 # =====================================================
 # PURGE ORPHAN STATES
