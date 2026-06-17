@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 
-set -e
+set -eEuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PATH=/usr/bin:/bin
+export PATH
+
+IFS=$' \t\n'
+
+SCRIPT_DIR="$(
+    cd "$(dirname "$0")" &&
+    pwd
+)"
 
 BIN_DIR="$HOME/.local/bin"
 BIN_FILE="$BIN_DIR/pacman-zta"
@@ -39,7 +47,8 @@ for CMD in \
     namcap
 do
 
-    command -v "$CMD" >/dev/null 2>&1 || MISSING+=("$CMD")
+    command -v "$CMD" >/dev/null 2>&1 ||
+        MISSING+=("$CMD")
 
 done
 
@@ -53,6 +62,7 @@ then
     echo
     echo "sudo pacman -S ${MISSING[*]}"
     echo
+
 fi
 
 # =====================================================
@@ -72,10 +82,13 @@ echo "Building pacman-zta..."
 echo
 
 mapfile -t MODULES < <(
-    find "$SCRIPT_DIR" \
+
+    command find \
+        "$SCRIPT_DIR" \
         -maxdepth 1 \
         -name '[0-9][0-9]-*.sh' |
     sort
+
 )
 
 if (( ${#MODULES[@]} == 0 ))
@@ -96,13 +109,46 @@ printf '  %s\n' "${MODULES[@]}"
 
 echo
 
-cat "${MODULES[@]}" > "$BIN_FILE"
+# =====================================================
+# VALIDATE MODULES
+# =====================================================
 
-chmod +x "$BIN_FILE"
+for MODULE in "${MODULES[@]}"
+do
 
-echo "Validating syntax..."
+    command bash -n "$MODULE" || {
 
-bash -n "$BIN_FILE"
+        echo
+        echo "Syntax error detected in:"
+        echo "$MODULE"
+        echo
+
+        exit 1
+
+    }
+
+done
+
+# =====================================================
+# ATOMIC BUILD
+# =====================================================
+
+TMP_BIN="$(
+    mktemp
+)"
+
+cat "${MODULES[@]}" \
+    > "$TMP_BIN"
+
+echo "Validating final syntax..."
+
+command bash -n "$TMP_BIN"
+
+command chmod +x "$TMP_BIN"
+
+command mv \
+    "$TMP_BIN" \
+    "$BIN_FILE"
 
 echo "Syntax OK."
 
@@ -110,11 +156,11 @@ echo "Syntax OK."
 # COMPLETIONS
 # =====================================================
 
-cp \
+command cp \
     "$SCRIPT_DIR/completion.bash" \
     "$BASH_COMPLETION_DIR/pacman-zta"
 
-cp \
+command cp \
     "$SCRIPT_DIR/completion.zsh" \
     "$ZSH_COMPLETION_DIR/_pacman-zta"
 
@@ -140,7 +186,8 @@ fi
 if [[ -f "$HOME/.bashrc" ]]
 then
 
-    if ! grep -q \
+    if ! command grep \
+        -Fq \
         "bash-completion/completions/pacman-zta" \
         "$HOME/.bashrc"
     then
@@ -166,7 +213,8 @@ fi
 if [[ -f "$HOME/.zshrc" ]]
 then
 
-    if ! grep -q \
+    if ! command grep \
+        -Fq \
         "pacman-zta completion" \
         "$HOME/.zshrc"
     then
@@ -198,6 +246,7 @@ echo "pacman-zta installed successfully."
 echo
 echo "Restart your shell or run:"
 echo
-echo "source ~/.bashrc"
-echo "source ~/.zshrc"
+echo
+echo "  source ~/.bashrc"
+echo "  source ~/.zshrc"
 echo

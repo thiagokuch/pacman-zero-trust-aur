@@ -12,19 +12,15 @@ audit_installed_package() {
 
     printf "%-40s" "$PKG"
 
-    cleanup_temp_workspace
-
-    audit_package "$PKG" >/dev/null 2>&1 || {
+    if ! audit_package "$PKG" \
+        >/dev/null 2>&1
+    then
 
         echo "BLOCK"
 
-        cleanup_temp_workspace
-
         return 1
 
-    }
-
-    cleanup_temp_workspace
+    fi
 
     echo "OK"
 
@@ -67,7 +63,10 @@ show_managed_count() {
 
     local COUNT
 
-    COUNT=$(list_managed_packages | wc -l)
+    COUNT="$(
+        list_managed_packages |
+        wc -l
+    )"
 
     echo
     echo "Managed packages: $COUNT"

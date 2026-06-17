@@ -1,9 +1,13 @@
 # =====================================================
+
 # 18-cli-main.sh
+
 # =====================================================
 
 # =====================================================
+
 # HELP
+
 # =====================================================
 
 show_help() {
@@ -14,22 +18,24 @@ pacman-zta Zero Trust Edition $VERSION
 
 Usage:
 
-    pacman-zta install <pkg...>
-    pacman-zta remove <pkg...>
-    pacman-zta update
+```
+pacman-zta install <pkg...>
+pacman-zta remove <pkg...>
+pacman-zta update
 
-    pacman-zta status <pkg>
-    pacman-zta list
+pacman-zta status <pkg>
+pacman-zta list
 
-    pacman-zta clean
-    pacman-zta full-clean
+pacman-zta clean
+pacman-zta full-clean
 
-    pacman-zta audit <pkg...>
-    pacman-zta audit-installed
+pacman-zta audit <pkg...>
+pacman-zta audit-installed
 
-    pacman-zta doctor
-    pacman-zta version
-    pacman-zta help
+pacman-zta doctor
+pacman-zta version
+pacman-zta help
+```
 
 Run without arguments to enter interactive mode.
 
@@ -38,302 +44,404 @@ EOF
 }
 
 # =====================================================
+
 # INTERACTIVE MENU
+
 # =====================================================
 
 interactive_menu() {
 
-    echo
-    echo "==========================================="
-    echo "pacman-zta Zero Trust Edition $VERSION"
-    echo "==========================================="
-    echo
+```
+local PKGS
+local PKG
 
-    PS3="Select an option: "
+echo
+echo "==========================================="
+echo "pacman-zta Zero Trust Edition $VERSION"
+echo "==========================================="
+echo
 
-    select OPTION in \
-        "Install package(s)" \
-        "Remove package(s)" \
-        "Update system" \
-        "Audit package(s)" \
-        "Audit installed packages" \
-        "List managed packages" \
-        "Package status" \
-        "Doctor" \
-        "Version" \
-        "Help" \
-        "Exit"
-    do
+PS3="Select an option: "
 
-        case "$REPLY" in
+select OPTION in \
+    "Install package(s)" \
+    "Remove package(s)" \
+    "Update system" \
+    "Audit package(s)" \
+    "Audit installed packages" \
+    "List managed packages" \
+    "Package status" \
+    "Doctor" \
+    "Version" \
+    "Help" \
+    "Exit"
+do
 
-            1)
-                read -rp "Package(s): " PKGS
-                install_packages $PKGS
-                break
-                ;;
+    case "$REPLY" in
 
-            2)
-                read -rp "Package(s): " PKGS
+        1)
 
-                for PKG in $PKGS
-                do
-                    remove_package "$PKG"
-                done
+            read -ra PKGS
 
-                break
-                ;;
+            install_packages "${PKGS[@]}"
 
-            3)
-                update_system
-                break
-                ;;
+            break
 
-            4)
-                read -rp "Package(s): " PKGS
-                audit $PKGS
-                break
-                ;;
+            ;;
 
-            5)
-                audit_installed
-                break
-                ;;
+        2)
 
-            6)
-                show_all_managed_packages
-                break
-                ;;
+            read -ra PKGS
 
-            7)
-                read -rp "Package: " PKG
-                show_package_status "$PKG"
-                break
-                ;;
+            for PKG in "${PKGS[@]}"
+            do
 
-            8)
-                doctor
-                break
-                ;;
+                remove_package "$PKG"
 
-            9)
-                show_version
-                break
-                ;;
+            done
 
-            10)
-                show_help
-                break
-                ;;
+            break
 
-            11)
-                break
-                ;;
+            ;;
 
-            *)
-                echo "Invalid option"
-                ;;
+        3)
 
-        esac
+            update_system
 
-    done
+            break
+
+            ;;
+
+        4)
+
+            read -ra PKGS
+
+            audit "${PKGS[@]}"
+
+            break
+
+            ;;
+
+        5)
+
+            audit_installed
+
+            break
+
+            ;;
+
+        6)
+
+            show_all_managed_packages
+
+            break
+
+            ;;
+
+        7)
+
+            read -rp "Package: " PKG
+
+            show_package_status "$PKG"
+
+            break
+
+            ;;
+
+        8)
+
+            doctor
+
+            break
+
+            ;;
+
+        9)
+
+            show_version
+
+            break
+
+            ;;
+
+        10)
+
+            show_help
+
+            break
+
+            ;;
+
+        11)
+
+            break
+
+            ;;
+
+        *)
+
+            echo "Invalid option"
+
+            ;;
+
+    esac
+
+done
+```
 
 }
 
 # =====================================================
+
 # PARSERS
+
 # =====================================================
 
 parse_install() {
 
-    shift
+```
+shift
 
-    [[ $# -eq 0 ]] && {
+[[ $# -gt 0 ]] || {
 
-        log_error "No package specified"
+    log_error "No package specified"
 
-        exit 1
+    return 1
 
-    }
+}
 
-    install_packages "$@"
+install_packages "$@"
+```
 
 }
 
 parse_remove() {
 
-    shift
+```
+shift
 
-    [[ $# -eq 0 ]] && {
+[[ $# -gt 0 ]] || {
 
-        log_error "No package specified"
+    log_error "No package specified"
 
-        exit 1
+    return 1
 
-    }
+}
 
-    local PKG
+local PKG
 
-    for PKG in "$@"
-    do
-        remove_package "$PKG"
-    done
+for PKG in "$@"
+do
+
+    remove_package "$PKG"
+
+done
+```
 
 }
 
 parse_status() {
 
-    shift
+```
+shift
 
-    [[ $# -ne 1 ]] && {
+[[ $# -eq 1 ]] || {
 
-        log_error "Specify one package"
+    log_error "Specify one package"
 
-        exit 1
+    return 1
 
-    }
+}
 
-    show_package_status "$1"
+show_package_status "$1"
+```
 
 }
 
 parse_list() {
 
-    show_all_managed_packages
+```
+show_all_managed_packages
+```
 
 }
 
 parse_clean() {
 
-    clean_cache
+```
+clean_cache
+```
 
 }
 
 parse_full_clean() {
 
-    full_clean
+```
+full_clean
+```
 
 }
 
 parse_audit() {
 
-    shift
+```
+shift
 
-    [[ $# -eq 0 ]] && {
+[[ $# -gt 0 ]] || {
 
-        log_error "No package specified"
+    log_error "No package specified"
 
-        exit 1
+    return 1
 
-    }
+}
 
-    audit "$@"
+audit "$@"
+```
 
 }
 
 parse_audit_installed() {
 
-    audit_installed
+```
+audit_installed
+```
 
 }
 
 parse_update() {
 
-    update_system
+```
+update_system
+```
 
 }
 
 parse_doctor() {
 
-    doctor
+```
+doctor
+```
 
 }
 
 parse_version() {
 
-    show_version
+```
+show_version
+```
 
 }
 
 # =====================================================
+
 # MAIN
+
 # =====================================================
 
 main() {
 
-    require_non_root
+```
+require_non_root
 
-    if [[ $# -eq 0 ]]
-    then
+if [[ $# -eq 0 ]]
+then
 
-        interactive_menu
+    interactive_menu
 
-        exit 0
+    return 0
 
-    fi
+fi
 
-    case "$1" in
+case "$1" in
 
-        install)
-            parse_install "$@"
-            ;;
+    install)
 
-        remove)
-            parse_remove "$@"
-            ;;
+        parse_install "$@"
 
-        update)
-            parse_update
-            ;;
+        ;;
 
-        status)
-            parse_status "$@"
-            ;;
+    remove)
 
-        list)
-            parse_list
-            ;;
+        parse_remove "$@"
 
-        clean)
-            parse_clean
-            ;;
+        ;;
 
-        full-clean)
-            parse_full_clean
-            ;;
+    update)
 
-        audit)
-            parse_audit "$@"
-            ;;
+        parse_update
 
-        audit-installed)
-            parse_audit_installed
-            ;;
+        ;;
 
-        doctor)
-            parse_doctor
-            ;;
+    status)
 
-        version)
-            parse_version
-            ;;
+        parse_status "$@"
 
-        help)
-            show_help
-            ;;
+        ;;
 
-        *)
-            log_error "Unknown command"
+    list)
 
-            echo
+        parse_list
 
-            show_help
+        ;;
 
-            exit 1
-            ;;
+    clean)
 
-    esac
+        parse_clean
+
+        ;;
+
+    full-clean)
+
+        parse_full_clean
+
+        ;;
+
+    audit)
+
+        parse_audit "$@"
+
+        ;;
+
+    audit-installed)
+
+        parse_audit_installed
+
+        ;;
+
+    doctor)
+
+        parse_doctor
+
+        ;;
+
+    version)
+
+        parse_version
+
+        ;;
+
+    help)
+
+        show_help
+
+        ;;
+
+    *)
+
+        log_error "Unknown command"
+
+        echo
+
+        show_help
+
+        return 1
+
+        ;;
+
+esac
+```
 
 }
 
 main "$@"
+exit $?

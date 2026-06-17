@@ -8,11 +8,13 @@
 
 find_package_file() {
 
-    find . \
+    command find \
+        "$(get_package_dir)" \
         -maxdepth 1 \
         -type f \
-        -name "*.pkg.tar*" \
-        | head -n1
+        ! -type l \
+        -name "*.pkg.tar*" |
+    head -n1
 
 }
 
@@ -22,13 +24,12 @@ find_package_file() {
 
 build_package() {
 
-    local PKG="$1"
-
     log_info "Preparing sandbox"
 
-    prepare_sandbox "$(pwd)" || {
+    prepare_sandbox || {
 
-        log_security "Sandbox preparation failed"
+        log_security \
+            "Sandbox preparation failed"
 
         return 1
 
@@ -36,9 +37,10 @@ build_package() {
 
     log_info "Building package"
 
-    sandbox_build "$(pwd)" || {
+    sandbox_build || {
 
-        log_security "Build failed"
+        log_security \
+            "Build failed"
 
         return 1
 
@@ -46,15 +48,14 @@ build_package() {
 
     run_post_build_analysis || {
 
-        log_security "Post-build analysis failed"
+        log_security \
+            "Post-build analysis failed"
 
         return 1
 
     }
 
     log_success "Build successful"
-
-    return 0
 
 }
 
@@ -66,31 +67,32 @@ verify_package_file() {
 
     local PKGFILE
 
-    PKGFILE=$(find_package_file)
+    PKGFILE="$(find_package_file)"
 
-    [[ -z "$PKGFILE" ]] && {
+    [[ -n "$PKGFILE" ]] || {
 
-        log_security "No package produced"
-
-        return 1
-
-    }
-
-    [[ ! -f "$PKGFILE" ]] && {
-
-        log_security "Generated package not found"
+        log_security \
+            "No package produced"
 
         return 1
 
     }
 
-    log_success "Package generated"
+    [[ -f "$PKGFILE" ]] || {
+
+        log_security \
+            "Generated package not found"
+
+        return 1
+
+    }
+
+    log_success \
+        "Package generated"
 
     echo
     echo "$PKGFILE"
     echo
-
-    return 0
 
 }
 
@@ -102,22 +104,22 @@ verify_package_signature() {
 
     local PKGFILE
 
-    PKGFILE=$(find_package_file)
+    PKGFILE="$(find_package_file)"
 
-    [[ -z "$PKGFILE" ]] && return 1
+    [[ -n "$PKGFILE" ]] || return 1
 
     if [[ -f "${PKGFILE}.sig" ]]
     then
 
-        log_info "Package signature found"
+        log_info \
+            "Package signature found"
 
     else
 
-        log_warn "Package has no detached signature"
+        log_warn \
+            "Package has no detached signature"
 
     fi
-
-    return 0
 
 }
 
@@ -127,15 +129,14 @@ verify_package_signature() {
 
 run_build_pipeline() {
 
-    local PKG="$1"
+    build_package ||
+        return 1
 
-    build_package "$PKG" || return 1
+    verify_package_file ||
+        return 1
 
-    verify_package_file || return 1
-
-    verify_package_signature || return 1
-
-    return 0
+    verify_package_signature ||
+        return 1
 
 }
 
@@ -145,24 +146,27 @@ run_build_pipeline() {
 
 build_only() {
 
-    local PKG="$1"
+    CURRENT_PACKAGE="$1"
 
-    log_info "Cloning $PKG"
+    log_info \
+        "Cloning $CURRENT_PACKAGE"
 
-    aur_clone "$PKG" || return 1
+    safe_git_clone ||
+        return 1
 
-    cd "$CACHE_DIR/$PKG" || return 1
+    run_reputation_checks ||
+        return 1
 
-    run_reputation_checks "$PKG" || return 1
+    run_hash_checks ||
+        return 1
 
-    run_hash_checks "$PKG" || return 1
+    run_static_analysis ||
+        return 1
 
-    run_static_analysis "$PKG" || return 1
+    run_build_pipeline ||
+        return 1
 
-    run_build_pipeline "$PKG" || return 1
-
-    log_success "$PKG built successfully"
-
-    return 0
+    log_success \
+        "$CURRENT_PACKAGE built successfully"
 
 }

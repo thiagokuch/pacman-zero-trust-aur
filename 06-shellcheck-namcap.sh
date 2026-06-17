@@ -3,21 +3,60 @@
 # =====================================================
 
 # =====================================================
+# SHELLCHECK FILES
+# =====================================================
+
+get_shellcheck_files() {
+
+    local PKG_DIR
+
+    PKG_DIR="$(get_package_dir)"
+
+    command find \
+        "$PKG_DIR" \
+        -xdev \
+        -type f \
+        ! -type l \
+        \
+        \( \
+            -name '*.sh' \
+            -o -name '*.install' \
+            -o -name 'PKGBUILD' \
+        \)
+
+}
+
+# =====================================================
 # SHELLCHECK
 # =====================================================
 
 run_shellcheck() {
 
-    local FILES
+    local STATUS=0
+    local FILE
 
-    FILES=$(find . -type f)
+    while read -r FILE
+    do
 
-    shellcheck $FILES >/tmp/pacman-zta-shellcheck.log 2>&1
+        [[ -z "$FILE" ]] && continue
 
-    if [[ $? -ne 0 ]]
+        if ! command shellcheck \
+            "$FILE" \
+            >>"$CACHE_DIR/shellcheck.log" \
+            2>&1
+        then
+
+            STATUS=1
+
+        fi
+
+    done < <(get_shellcheck_files)
+
+    if (( STATUS ))
     then
 
-        log_security "shellcheck failed"
+        log_security \
+            "shellcheck failed"
 
         add_hard_failure \
             "Shellcheck detected errors"
@@ -38,12 +77,18 @@ run_shellcheck() {
 
 run_namcap() {
 
-    namcap PKGBUILD >/tmp/pacman-zta-namcap.log 2>&1
+    local PKGBUILD_FILE
 
-    if [[ $? -ne 0 ]]
+    PKGBUILD_FILE="$(get_pkgbuild_file)"
+
+    if ! command namcap \
+        "$PKGBUILD_FILE" \
+        >"$CACHE_DIR/namcap.log" \
+        2>&1
     then
 
-        log_security "namcap failed"
+        log_security \
+            "namcap failed"
 
         add_hard_failure \
             "Namcap detected issues"

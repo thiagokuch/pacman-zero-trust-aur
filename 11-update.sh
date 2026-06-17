@@ -8,11 +8,12 @@
 
 list_managed_packages() {
 
-    find "$STATE_DIR" \
+    command find \
+        "$STATE_DIR" \
         -type f \
         -name "*.json" |
-        sed 's|.*/||' |
-        sed 's/.json$//'
+    command sed 's|.*/||' |
+    command sed 's/.json$//'
 
 }
 
@@ -22,17 +23,18 @@ list_managed_packages() {
 
 package_has_update() {
 
-    local PKG="$1"
-
-    aur_clone "$PKG" || return 1
-
-    cd "$CACHE_DIR/$PKG" || return 1
-
     local OLD_COMMIT
     local NEW_COMMIT
 
-    OLD_COMMIT=$(state_get_commit "$PKG")
-    NEW_COMMIT=$(aur_get_commit)
+    safe_git_clone || return 1
+
+    OLD_COMMIT="$(state_get_commit "$CURRENT_PACKAGE")"
+
+    NEW_COMMIT="$(
+        command git \
+            -C "$(get_package_dir)" \
+            rev-parse HEAD
+    )"
 
     [[ "$OLD_COMMIT" != "$NEW_COMMIT" ]]
 
@@ -44,19 +46,20 @@ package_has_update() {
 
 show_update_diff() {
 
-    local PKG="$1"
-
-    cd "$CACHE_DIR/$PKG" || return 1
-
     local OLD_COMMIT
     local NEW_COMMIT
 
-    OLD_COMMIT=$(state_get_commit "$PKG")
-    NEW_COMMIT=$(aur_get_commit)
+    OLD_COMMIT="$(state_get_commit "$CURRENT_PACKAGE")"
+
+    NEW_COMMIT="$(
+        command git \
+            -C "$(get_package_dir)" \
+            rev-parse HEAD
+    )"
 
     echo
     echo "================================="
-    echo "$PKG"
+    echo "$CURRENT_PACKAGE"
     echo "================================="
     echo
 
@@ -68,7 +71,9 @@ show_update_diff() {
     echo "$NEW_COMMIT"
     echo
 
-    show_diff "$OLD_COMMIT" "$NEW_COMMIT"
+    show_diff \
+        "$OLD_COMMIT" \
+        "$NEW_COMMIT"
 
 }
 
@@ -78,23 +83,32 @@ show_update_diff() {
 
 update_package() {
 
-    local PKG="$1"
+    CURRENT_PACKAGE="$1"
 
-    log_info "Checking updates for $PKG"
+    log_info \
+        "Checking updates for $CURRENT_PACKAGE"
 
-    package_has_update "$PKG" || {
+    if ! package_has_update
+    then
 
-        log_info "$PKG already up to date"
+        log_info \
+            "$CURRENT_PACKAGE already up to date"
+
+        cleanup_temp_workspace
 
         return 0
 
-    }
+    fi
 
-    show_update_diff "$PKG"
+    show_update_diff
 
-    log_warn "$PKG has changed"
+    log_warn \
+        "$CURRENT_PACKAGE has changed"
 
-    install_from_aur "$PKG"
+    install_package \
+        "$CURRENT_PACKAGE"
+
+    cleanup_temp_workspace
 
 }
 
@@ -106,12 +120,14 @@ update_aur_packages() {
 
     local PKG
 
-    for PKG in $(list_managed_packages)
+    while read -r PKG
     do
+
+        [[ -z "$PKG" ]] && continue
 
         update_package "$PKG"
 
-    done
+    done < <(list_managed_packages)
 
 }
 
@@ -121,7 +137,8 @@ update_aur_packages() {
 
 update_repo_packages() {
 
-    log_info "Updating official repositories"
+    log_info \
+        "Updating official repositories"
 
     sudo pacman -Syu
 
@@ -133,9 +150,11 @@ update_repo_packages() {
 
 update_system() {
 
-    update_repo_packages || return 1
+    update_repo_packages ||
+        return 1
 
-    update_aur_packages || return 1
+    update_aur_packages ||
+        return 1
 
 }
 
@@ -147,17 +166,22 @@ list_outdated_aur_packages() {
 
     local PKG
 
-    for PKG in $(list_managed_packages)
+    while read -r PKG
     do
 
-        if package_has_update "$PKG"
+        [[ -z "$PKG" ]] && continue
+
+        CURRENT_PACKAGE="$PKG"
+
+        if package_has_update
         then
 
             echo "$PKG"
-
         fi
 
-    done
+        cleanup_temp_workspace
+
+    done < <(list_managed_packages)
 
 }
 
@@ -173,21 +197,24 @@ show_update_status() {
     echo "Managed packages:"
     echo
 
-    for PKG in $(list_managed_packages)
+    while read -r PKG
     do
 
-        if package_has_update "$PKG"
+        [[ -z "$PKG" ]] && continue
+
+        CURRENT_PACKAGE="$PKG"
+
+        if package_has_update
         then
 
             echo "↑ $PKG"
-
         else
-
             echo "✓ $PKG"
-
         fi
 
-    done
+        cleanup_temp_workspace
+
+    done < <(list_managed_packages)
 
     echo
 
@@ -201,15 +228,20 @@ verify_managed_packages() {
 
     local PKG
 
-    for PKG in $(list_managed_packages)
+    while read -r PKG
     do
 
-        pacman -Q "$PKG" >/dev/null 2>&1 || {
+        [[ -z "$PKG" ]] && continue
 
-            log_warn "$PKG is no longer installed"
+        command pacman \
+            -Q "$PKG" \
+            >/dev/null 2>&1 || {
+
+            log_warn \
+                "$PKG is no longer installed"
 
         }
 
-    done
+    done < <(list_managed_packages)
 
 }

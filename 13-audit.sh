@@ -8,38 +8,22 @@
 
 audit_package() {
 
-    local PKG="$1"
-    local TMP_DIR
     local LEVEL
     local RESULT
 
+    CURRENT_PACKAGE="$1"
+
     reset_score
 
-    TMP_DIR="$(mktemp -d)"
-
     echo
     echo "======================================"
-    echo "AUDITING $PKG"
+    echo "AUDITING $CURRENT_PACKAGE"
     echo "======================================"
     echo
 
-    aur_clone "$PKG" "$TMP_DIR" || {
+    safe_git_clone || return 1
 
-        rm -rf "$TMP_DIR"
-
-        return 1
-
-    }
-
-    enter_package_dir "$PKG" "$TMP_DIR" || {
-
-        rm -rf "$TMP_DIR"
-
-        return 1
-
-    }
-
-    run_reputation_checks "$PKG"
+    run_reputation_checks
 
     echo
     echo "======================================"
@@ -55,7 +39,9 @@ audit_package() {
 
     scan_install_hooks
 
-    run_history_checks "$PKG"
+    run_shellcheck_and_namcap
+
+    run_history_checks "$CURRENT_PACKAGE"
 
     echo
     echo "======================================"
@@ -105,31 +91,40 @@ audit_package() {
     echo
     echo "Audit result: $RESULT"
 
-    CURRENT_AUDIT_TIME="$(get_current_audit_time)"
-    CURRENT_HASH="$(get_last_commit_hash)"
-    CURRENT_COMMITS="$(get_commit_count)"
-    CURRENT_MAINTAINER="$(get_current_maintainer)"
+    CURRENT_AUDIT_TIME="$(
+        get_current_audit_time
+    )"
+
+    CURRENT_HASH="$(
+        get_last_commit_hash
+    )"
+
+    CURRENT_COMMITS="$(
+        get_commit_count
+    )"
+
+    CURRENT_MAINTAINER="$(
+        get_current_maintainer
+    )"
 
     #
     # Save last audit always
     #
 
-    save_last_state "$PKG"
+    save_last_state "$CURRENT_PACKAGE"
 
-    rm -rf "$TMP_DIR"
+    cleanup_temp_workspace
 
     case "$RESULT" in
 
         PASS|REVIEW)
 
             return 0
-
             ;;
 
         BLOCK)
 
             return 1
-
             ;;
 
     esac
@@ -144,12 +139,14 @@ audit_packages() {
 
     local PKG
 
-    for PKG in "$@"
+    while read -r PKG
     do
+
+        [[ -z "$PKG" ]] && continue
 
         audit_package "$PKG"
 
-    done
+    done < <(printf '%s\n' "$@")
 
 }
 
@@ -161,7 +158,8 @@ audit() {
 
     [[ $# -eq 0 ]] && {
 
-        log_error "No package specified"
+        log_error \
+            "No package specified"
 
         return 1
 
@@ -170,4 +168,3 @@ audit() {
     audit_packages "$@"
 
 }
-

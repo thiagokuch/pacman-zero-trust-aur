@@ -2,7 +2,6 @@
 # 08-sandbox.sh
 # =====================================================
 
-# Dedicated build user
 AUR_BUILDER_USER="aurbuilder"
 
 # =====================================================
@@ -14,7 +13,8 @@ ensure_builder_user() {
     if ! id "$AUR_BUILDER_USER" >/dev/null 2>&1
     then
 
-        log_warn "Creating build user $AUR_BUILDER_USER"
+        log_warn \
+            "Creating build user $AUR_BUILDER_USER"
 
         sudo useradd \
             --system \
@@ -27,14 +27,25 @@ ensure_builder_user() {
 }
 
 # =====================================================
+# BUILD DIRECTORY
+# =====================================================
+
+get_build_dir() {
+
+    get_package_dir
+
+}
+
+# =====================================================
 # PREPARE BUILD DIRECTORY
 # =====================================================
 
 prepare_build_directory() {
 
-    local DIR="$1"
-
-    sudo chown -R "$AUR_BUILDER_USER:$AUR_BUILDER_USER" "$DIR"
+    sudo chown \
+        -R \
+        "$AUR_BUILDER_USER:$AUR_BUILDER_USER" \
+        "$(get_build_dir)"
 
 }
 
@@ -46,8 +57,10 @@ prefetch_sources() {
 
     log_info "Prefetching sources"
 
-    sudo -u "$AUR_BUILDER_USER" \
+    sudo \
+        -u "$AUR_BUILDER_USER" \
         makepkg \
+        --dir "$(get_build_dir)" \
         --nobuild \
         --syncdeps \
         --noconfirm
@@ -60,9 +73,8 @@ prefetch_sources() {
 
 sandbox_build() {
 
-    local WORKDIR="$1"
-
-    log_info "Starting sandboxed offline build"
+    log_info \
+        "Starting sandboxed offline build"
 
     systemd-run \
         --wait \
@@ -96,10 +108,10 @@ sandbox_build() {
         -p IPAddressDeny=any \
         -p SystemCallArchitectures=native \
         -p RestrictAddressFamilies=AF_UNIX \
-        bash -c "
-            cd '$WORKDIR' &&
-            makepkg -e --noconfirm
-        "
+        makepkg \
+            --dir "$(get_build_dir)" \
+            -e \
+            --noconfirm
 
 }
 
@@ -109,12 +121,28 @@ sandbox_build() {
 
 sandbox_cleanup() {
 
-    find "$CACHE_DIR" \
+    command find \
+        "$BUILD_CACHE_DIR" \
         -mindepth 1 \
         -maxdepth 1 \
         -type d \
         -mtime +30 \
-        -exec rm -rf {} +
+        -print0 |
+    while IFS= read -r -d '' DIR
+    do
+
+        [[ ! -L "$DIR" ]] || continue
+
+        command find \
+            "$DIR" \
+            -mindepth 1 \
+            -xdev \
+            ! -type l \
+            -delete
+
+        rmdir "$DIR" 2>/dev/null || true
+
+    done
 
 }
 
@@ -124,14 +152,13 @@ sandbox_cleanup() {
 
 prepare_sandbox() {
 
-    local DIR="$1"
+    ensure_builder_user ||
+        return 1
 
-    ensure_builder_user || return 1
+    prepare_build_directory ||
+        return 1
 
-    prepare_build_directory "$DIR" || return 1
-
-    prefetch_sources || return 1
-
-    return 0
+    prefetch_sources ||
+        return 1
 
 }

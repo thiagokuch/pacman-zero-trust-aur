@@ -2,15 +2,21 @@
 # 17-history-checks.sh
 # =====================================================
 
+declare HASH_CHANGED="no"
+declare MAINTAINER_CHANGED="no"
+declare COMMIT_GROWTH="+0"
+
 # =====================================================
 # CURRENT MAINTAINER
 # =====================================================
 
 get_current_maintainer() {
 
-    grep '^# Maintainer:' PKGBUILD |
-        head -n1 |
-        sed 's/^# Maintainer:[[:space:]]*//'
+    command grep \
+        '^# Maintainer:' \
+        "$(get_pkgbuild_file)" |
+    head -n1 |
+    sed 's/^# Maintainer:[[:space:]]*//'
 
 }
 
@@ -20,11 +26,11 @@ get_current_maintainer() {
 
 check_hash_change() {
 
-    CURRENT_HASH=$(get_last_commit_hash)
+    CURRENT_HASH="$(get_last_commit_hash)"
 
     HASH_CHANGED="no"
 
-    [[ -z "$LAST_HASH" ]] && return
+    [[ -n "${LAST_HASH:-}" ]] || return
 
     if [[ "$CURRENT_HASH" != "$LAST_HASH" ]]
     then
@@ -49,11 +55,13 @@ check_hash_change() {
 
 check_maintainer_change() {
 
-    CURRENT_MAINTAINER=$(get_current_maintainer)
+    CURRENT_MAINTAINER="$(
+        get_current_maintainer
+    )"
 
     MAINTAINER_CHANGED="no"
 
-    [[ -z "$LAST_MAINTAINER" ]] && return
+    [[ -n "${LAST_MAINTAINER:-}" ]] || return
 
     if [[ "$CURRENT_MAINTAINER" != "$LAST_MAINTAINER" ]]
     then
@@ -80,13 +88,21 @@ check_commit_growth() {
 
     local DELTA
 
-    CURRENT_COMMITS=$(get_commit_count)
+    CURRENT_COMMITS="$(
+        get_commit_count
+    )"
 
     COMMIT_GROWTH="+0"
 
-    (( LAST_COMMITS == 0 )) && return
+    (( LAST_COMMITS == 0 )) &&
+        return
 
-    DELTA=$(( CURRENT_COMMITS - LAST_COMMITS ))
+    DELTA=$(
+        (
+            CURRENT_COMMITS -
+            LAST_COMMITS
+        )
+    )
 
     COMMIT_GROWTH="+${DELTA}"
 
@@ -146,9 +162,7 @@ show_history() {
 
 run_history_checks() {
 
-    local PKG="$1"
-
-    load_package_state "$PKG"
+    load_package_state
 
     check_hash_change
 

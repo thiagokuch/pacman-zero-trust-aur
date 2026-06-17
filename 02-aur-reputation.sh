@@ -2,6 +2,31 @@
 # 02-aur-reputation.sh
 # =====================================================
 
+declare AUR_JSON=""
+
+# =====================================================
+# GET AUR INFO
+# =====================================================
+
+get_aur_info() {
+
+    AUR_JSON=$(
+        command curl \
+            -fsSL \
+            --connect-timeout 10 \
+            --max-time 30 \
+            "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=${CURRENT_PACKAGE}"
+    ) || {
+
+        add_hard_failure \
+            "Unable to query AUR API"
+
+        return 1
+
+    }
+
+}
+
 # =====================================================
 # PACKAGE AGE CHECK
 # =====================================================
@@ -10,9 +35,11 @@ check_package_age() {
 
     local AGE
 
-    AGE=$(get_package_age_days)
+    AGE="$(get_package_age_days)"
 
-    printf "%-25s %s days\n" "Package age:" "$AGE"
+    printf "%-25s %s days\n" \
+        "Package age:" \
+        "$AGE"
 
     if (( AGE < MIN_AGE_DAYS ))
     then
@@ -37,16 +64,17 @@ check_package_age() {
 
 check_package_votes() {
 
-    local PKG="$1"
     local VOTES
 
     VOTES=$(
-        curl -fsSL \
-        "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=${PKG}" |
-        jq -r '.results[0].NumVotes'
+        command jq \
+            -r '.results[0].NumVotes' \
+            <<< "$AUR_JSON"
     )
 
-    printf "%-25s %s\n" "Votes:" "$VOTES"
+    printf "%-25s %s\n" \
+        "Votes:" \
+        "$VOTES"
 
     if (( VOTES < MIN_VOTES ))
     then
@@ -71,21 +99,22 @@ check_package_votes() {
 
 check_package_popularity() {
 
-    local PKG="$1"
     local POPULARITY
 
     POPULARITY=$(
-        curl -fsSL \
-        "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=${PKG}" |
-        jq -r '.results[0].Popularity'
+        command jq \
+            -r '.results[0].Popularity' \
+            <<< "$AUR_JSON"
     )
 
-    printf "%-25s %s\n" "Popularity:" "$POPULARITY"
+    printf "%-25s %s\n" \
+        "Popularity:" \
+        "$POPULARITY"
 
-    awk -v p="$POPULARITY" -v m="$MIN_POPULARITY" \
+    if awk \
+        -v p="$POPULARITY" \
+        -v m="$MIN_POPULARITY" \
         'BEGIN { exit !(p < m) }'
-
-    if [[ $? -eq 0 ]]
     then
 
         log_security \
@@ -108,11 +137,9 @@ check_package_popularity() {
 
 check_commit_count() {
 
-    local COUNT
-
-    COUNT=$(get_commit_count)
-
-    printf "%-25s %s\n" "Commit count:" "$COUNT"
+    printf "%-25s %s\n" \
+        "Commit count:" \
+        "$(get_commit_count)"
 
 }
 
@@ -122,11 +149,9 @@ check_commit_count() {
 
 check_last_commit_date() {
 
-    local DATE
-
-    DATE=$(get_last_commit_date)
-
-    printf "%-25s %s\n" "Last commit date:" "$DATE"
+    printf "%-25s %s\n" \
+        "Last commit date:" \
+        "$(get_last_commit_date)"
 
 }
 
@@ -136,11 +161,9 @@ check_last_commit_date() {
 
 check_last_commit_hash() {
 
-    local HASH
-
-    HASH=$(get_last_commit_hash)
-
-    printf "%-25s %s\n" "Last commit hash:" "$HASH"
+    printf "%-25s %s\n" \
+        "Last commit hash:" \
+        "$(get_last_commit_hash)"
 
 }
 
@@ -150,22 +173,17 @@ check_last_commit_hash() {
 
 run_reputation_checks() {
 
-    local PKG="$1"
-
     echo "======================================"
     echo "REPUTATION"
     echo "======================================"
 
+    get_aur_info || return 1
+
     check_package_age
-
-    check_package_votes "$PKG"
-
-    check_package_popularity "$PKG"
-
+    check_package_votes
+    check_package_popularity
     check_commit_count
-
     check_last_commit_date
-
     check_last_commit_hash
 
     echo

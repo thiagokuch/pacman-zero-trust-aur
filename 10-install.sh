@@ -4,11 +4,12 @@
 
 install_package() {
 
-    local PKG="$1"
     local LEVEL
     local ANSWER
 
-    audit_package "$PKG" || true
+    CURRENT_PACKAGE="$1"
+
+    audit_package "$CURRENT_PACKAGE" || true
 
     LEVEL="$(get_score_level)"
 
@@ -99,9 +100,11 @@ install_package() {
 
     echo
 
-    log_info "Building package..."
+    log_info \
+        "Building package..."
 
-    build_package "$PKG" || return 1
+    build_package ||
+        return 1
 
     #
     # SNAPSHOT
@@ -118,7 +121,7 @@ install_package() {
             "Creating pre-install snapshot..."
 
         create_snapshot \
-            "PRE-AUR: $PKG"
+            "PRE-AUR: $CURRENT_PACKAGE"
 
         SNAPSHOT_ID="$(
             get_last_snapshot_id
@@ -138,9 +141,11 @@ install_package() {
     log_info \
         "Installing package..."
 
-    install_built_package "$PKG" || return 1
+    install_built_package ||
+        return 1
 
-    register_managed_package "$PKG"
+    register_managed_package \
+        "$CURRENT_PACKAGE"
 
     #
     # SAVE APPROVED STATE
@@ -162,14 +167,15 @@ install_package() {
         get_current_maintainer
     )"
 
-    save_approved_state "$PKG"
+    save_approved_state \
+        "$CURRENT_PACKAGE"
 
     echo
 
     log_success \
-        "$PKG installed successfully."
+        "$CURRENT_PACKAGE installed successfully."
 
-    if [[ -n "$SNAPSHOT_ID" ]]
+    if [[ -n "${SNAPSHOT_ID:-}" ]]
     then
 
         echo

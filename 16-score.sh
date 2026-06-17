@@ -2,6 +2,11 @@
 # 16-score.sh
 # =====================================================
 
+declare CURRENT_SCORE=100
+declare FAILURES=0
+declare HARD_FAILURE=0
+declare -a FAILURE_MESSAGES=()
+
 # =====================================================
 # RESET SCORE
 # =====================================================
@@ -24,7 +29,17 @@ reset_score() {
 
 add_failure() {
 
-    FAILURE_MESSAGES+=("$1")
+    local MESSAGE="$1"
+    local FAILURE
+
+    for FAILURE in "${FAILURE_MESSAGES[@]}"
+    do
+
+        [[ "$FAILURE" == "$MESSAGE" ]] && return
+
+    done
+
+    FAILURE_MESSAGES+=("$MESSAGE")
 
 }
 
@@ -50,7 +65,8 @@ score_penalty() {
 
     (( CURRENT_SCORE -= POINTS ))
 
-    (( CURRENT_SCORE < 0 )) && CURRENT_SCORE=0
+    (( CURRENT_SCORE < 0 )) &&
+        CURRENT_SCORE=0
 
     (( FAILURES++ ))
 
@@ -101,13 +117,15 @@ get_score_level() {
 
 install_allowed() {
 
-    (( HARD_FAILURE )) && return 1
+    (( HARD_FAILURE )) &&
+        return 1
 
     local LEVEL
 
     LEVEL="$(get_score_level)"
 
-    [[ "$LEVEL" == "EXCELLENT" || "$LEVEL" == "GOOD" ]]
+    [[ "$LEVEL" == "EXCELLENT" ||
+       "$LEVEL" == "GOOD" ]]
 
 }
 
@@ -117,13 +135,15 @@ install_allowed() {
 
 show_failures() {
 
-    (( FAILURES == 0 )) && return
+    (( ${#FAILURE_MESSAGES[@]} == 0 )) &&
+        return
 
     echo
     echo "Failures:"
     echo
 
-    printf ' - %s\n' "${FAILURE_MESSAGES[@]}"
+    printf ' - %s\n' \
+        "${FAILURE_MESSAGES[@]}"
 
 }
 

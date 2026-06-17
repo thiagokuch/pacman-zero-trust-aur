@@ -1,199 +1,199 @@
-# =====================================================
-# 01-foundation.sh
-# =====================================================
+#!/usr/bin/env bash
 
-VERSION="0.1.0"
+set -eEuo pipefail
+
+PATH=/usr/bin:/bin
+export PATH
+
+IFS=$' \t\n'
+
+shopt -s failglob
 
 # =====================================================
 # DIRECTORIES
 # =====================================================
 
+CACHE_DIR="$HOME/.cache/pacman-zta"
 STATE_DIR="$HOME/.local/share/pacman-zta/state"
-CONFIG_FILE="$HOME/.config/pacman-zta.conf"
+BUILD_CACHE_DIR="$HOME/.cache/pacman-zta/build"
+TMP_ROOT="/tmp/pacman-zta"
 
+mkdir -p "$CACHE_DIR"
 mkdir -p "$STATE_DIR"
+mkdir -p "$BUILD_CACHE_DIR"
+mkdir -p "$TMP_ROOT"
+
+CACHE_DIR="$(command realpath "$CACHE_DIR")"
+STATE_DIR="$(command realpath "$STATE_DIR")"
+BUILD_CACHE_DIR="$(command realpath "$BUILD_CACHE_DIR")"
+TMP_ROOT="$(command realpath "$TMP_ROOT")"
+
+readonly CACHE_DIR
+readonly STATE_DIR
+readonly BUILD_CACHE_DIR
+readonly TMP_ROOT
+
+declare TMP_DIR=""
+declare CURRENT_PACKAGE=""
 
 # =====================================================
-# ROOT PROTECTION
+# PANIC
 # =====================================================
 
-require_non_root() {
+panic() {
 
-    if [[ "$EUID" -eq 0 ]]
-    then
+    log_security "PANIC: $1"
 
-        log_error "pacman-zta must not be run as root."
-
-        echo >&2
-        echo "Current user : $(id -un)" >&2
-        echo "Current HOME : $HOME" >&2
-        echo >&2
-        echo "Run pacman-zta as your normal user." >&2
-        echo >&2
-
-        exit 1
-
-    fi
-
-    if [[ "$HOME" == "/root" ]]
-    then
-
-        log_error "pacman-zta must not use /root as HOME."
-
-        echo >&2
-        echo "Current user : $(id -un)" >&2
-        echo "Current HOME : $HOME" >&2
-        echo >&2
-
-        exit 1
-
-    fi
+    exit 1
 
 }
 
 # =====================================================
-# SUDO KEEPALIVE
+# VERIFY PATHS
 # =====================================================
 
-sudo_keepalive() {
+verify_paths() {
 
-    sudo -v || {
+    [[ -d "$CACHE_DIR" ]] || panic "Invalid CACHE_DIR"
+    [[ -d "$STATE_DIR" ]] || panic "Invalid STATE_DIR"
+    [[ -d "$BUILD_CACHE_DIR" ]] || panic "Invalid BUILD_CACHE_DIR"
+    [[ -d "$TMP_ROOT" ]] || panic "Invalid TMP_ROOT"
 
-        log_error "Unable to obtain sudo privileges."
+    [[ ! -L "$CACHE_DIR" ]] || panic "CACHE_DIR is symlink"
+    [[ ! -L "$STATE_DIR" ]] || panic "STATE_DIR is symlink"
+    [[ ! -L "$BUILD_CACHE_DIR" ]] || panic "BUILD_CACHE_DIR is symlink"
+    [[ ! -L "$TMP_ROOT" ]] || panic "TMP_ROOT is symlink"
 
-        exit 1
+}
+
+# =====================================================
+# PACKAGE DIRECTORY
+# =====================================================
+
+get_package_dir() {
+
+    echo "$TMP_DIR/$CURRENT_PACKAGE"
+
+}
+
+# =====================================================
+# SAFE DELETE CACHE
+# =====================================================
+
+safe_delete_cache() {
+
+    command find \
+        "$CACHE_DIR" \
+        -mindepth 1 \
+        -xdev \
+        ! -type l \
+        -exec unlink {} \;
+
+}
+
+# =====================================================
+# SAFE DELETE STATE
+# =====================================================
+
+safe_delete_state() {
+
+    command find \
+        "$STATE_DIR" \
+        -type f \
+        -delete
+
+}
+
+# =====================================================
+# SAFE DELETE BUILD CACHE
+# =====================================================
+
+safe_delete_build_cache() {
+
+    command find \
+        "$BUILD_CACHE_DIR" \
+        -mindepth 1 \
+        -xdev \
+        ! -type l \
+        -delete
+
+}
+
+# =====================================================
+# CREATE TEMP WORKSPACE
+# =====================================================
+
+create_temp_workspace() {
+
+    [[ -z "${TMP_DIR:-}" ]] \
+        || panic "Workspace already exists"
+
+    TMP_DIR="$(command mktemp -d "$TMP_ROOT/tmp.XXXXXX")"
+
+    TMP_DIR="$(command realpath "$TMP_DIR")"
+
+    [[ "$TMP_DIR" == "$TMP_ROOT/"* ]] \
+        || panic "TMP escaped TMP_ROOT"
+
+}
+
+# =====================================================
+# CLEANUP TEMP WORKSPACE
+# =====================================================
+
+cleanup_temp_workspace() {
+
+    [[ -z "${TMP_DIR:-}" ]] && return
+    [[ ! -d "$TMP_DIR" ]] && {
+
+        TMP_DIR=""
+
+        return
 
     }
 
-}
+    [[ ! -L "$TMP_DIR" ]] \
+        || panic "TMP_DIR is symlink"
 
-# =====================================================
-# DEFAULT POLICY
-# =====================================================
+    command find \
+        "$TMP_DIR" \
+        -mindepth 1 \
+        -xdev \
+        ! -type l \
+        -delete
 
-MIN_AGE_DAYS=90
-MIN_VOTES=10
-MIN_POPULARITY=1.0
+    rmdir "$TMP_DIR" 2>/dev/null || true
 
-# =====================================================
-# LOAD CONFIG
-# =====================================================
-
-if [[ -f "$CONFIG_FILE" ]]
-then
-
-    # shellcheck disable=SC1090
-    source "$CONFIG_FILE"
-
-fi
-
-# =====================================================
-# BLOCKED PACKAGE SUFFIXES
-# =====================================================
-
-BLOCKED_SUFFIXES=(
--git
--svn
--hg
--nightly
--alpha
--beta
--rc
-)
-
-# =====================================================
-# BLOCKED DEPENDENCIES
-# =====================================================
-
-BLACKLIST_DEPS=(
-npm
-bun
-)
-
-# =====================================================
-# BLACKLIST PATTERNS
-# =====================================================
-
-BLACKLIST_PATTERNS=(
-"curl.+\|.+bash"
-"wget.+\|.+sh"
-"curl -fsSL"
-"wget -q"
-"eval"
-"base64 -d"
-"xxd -r"
-"openssl enc"
-"python -c"
-"perl -e"
-"ruby -e"
-"lua -e"
-"nc "
-"ncat"
-"socat"
-"mkfifo"
-"/dev/tcp"
-)
-
-# =====================================================
-# COLORS
-# =====================================================
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# =====================================================
-# TIMESTAMP
-# =====================================================
-
-timestamp() {
-
-    date "+%Y-%m-%d %H:%M:%S"
+    TMP_DIR=""
 
 }
 
 # =====================================================
-# LOGGING
+# SAFE GIT CLONE
 # =====================================================
 
-log_info() {
+safe_git_clone() {
 
-    echo -e "${BLUE}[$(timestamp)] [INFO]${NC} $*"
+    create_temp_workspace
 
-}
+    if ! command git clone \
+        "https://aur.archlinux.org/${CURRENT_PACKAGE}.git" \
+        "$(get_package_dir)" \
+        >/dev/null \
+        2>"$CACHE_DIR/clone.log"
+    then
 
-log_warn() {
+        add_hard_failure \
+            "Unable to clone package repository"
 
-    echo -e "${YELLOW}[$(timestamp)] [WARNING]${NC} $*" >&2
+        cleanup_temp_workspace
 
-}
+        return 1
 
-log_error() {
-
-    echo -e "${RED}[$(timestamp)] [ERROR]${NC} $*" >&2
-
-}
-
-log_security() {
-
-    echo -e "${RED}[$(timestamp)] [SECURITY_BLOCK]${NC} $*" >&2
+    fi
 
 }
 
-log_success() {
+trap -- cleanup_temp_workspace EXIT
 
-    echo -e "${GREEN}[$(timestamp)] [OK]${NC} $*"
-
-}
-
-# =====================================================
-# VERSION
-# =====================================================
-
-show_version() {
-
-    echo "pacman-zta Zero Trust Edition $VERSION"
-
-}
+verify_paths

@@ -3,17 +3,55 @@
 # =====================================================
 
 # =====================================================
+# PKGBUILD FILE
+# =====================================================
+
+get_pkgbuild_file() {
+
+    local FILE
+
+    FILE="$(get_package_dir)/PKGBUILD"
+
+    [[ -f "$FILE" ]] || {
+
+        add_hard_failure \
+            "PKGBUILD not found"
+
+        panic \
+            "PKGBUILD not found"
+
+    }
+
+    [[ ! -L "$FILE" ]] || {
+
+        add_hard_failure \
+            "PKGBUILD is symlink"
+
+        panic \
+            "PKGBUILD is symlink"
+
+    }
+
+    echo "$FILE"
+
+}
+
+# =====================================================
 # CHECK SKIP CHECKSUMS
 # =====================================================
 
 check_skip_checksums() {
 
     local MATCHES
+    local PKGBUILD_FILE
+
+    PKGBUILD_FILE="$(get_pkgbuild_file)"
 
     MATCHES=$(
-        grep -nE \
+        command grep \
+            -nE \
             '^[a-zA-Z0-9_]+sums=.*SKIP|SKIP' \
-            PKGBUILD
+            "$PKGBUILD_FILE"
     )
 
     [[ -z "$MATCHES" ]] && return 0
@@ -42,12 +80,18 @@ check_blacklist_patterns() {
 
     local PATTERN
     local MATCHES
+    local PKGBUILD_FILE
+
+    PKGBUILD_FILE="$(get_pkgbuild_file)"
 
     for PATTERN in "${BLACKLIST_PATTERNS[@]}"
     do
 
         MATCHES=$(
-            grep -Ein "$PATTERN" PKGBUILD
+            command grep \
+                -Ein \
+                "$PATTERN" \
+                "$PKGBUILD_FILE"
         )
 
         [[ -z "$MATCHES" ]] && continue
@@ -77,11 +121,17 @@ check_blacklist_patterns() {
 check_blacklist_dependencies() {
 
     local DEP
+    local PKGBUILD_FILE
+
+    PKGBUILD_FILE="$(get_pkgbuild_file)"
 
     for DEP in "${BLACKLIST_DEPS[@]}"
     do
 
-        if grep -Eq "(depends|makedepends)=.*${DEP}" PKGBUILD
+        if command grep \
+            -Eq \
+            "(depends|makedepends)=.*${DEP}" \
+            "$PKGBUILD_FILE"
         then
 
             log_security \
@@ -107,6 +157,9 @@ check_blacklist_dependencies() {
 check_source_urls() {
 
     local URL
+    local PKGBUILD_FILE
+
+    PKGBUILD_FILE="$(get_pkgbuild_file)"
 
     while read -r URL
     do
@@ -119,8 +172,8 @@ check_source_urls() {
 
     done < <(
 
-        grep '^source=' PKGBUILD |
-        sed 's/^source=//' |
+        command grep '^source=' "$PKGBUILD_FILE" |
+        command sed 's/^source=//' |
         tr '()' ' '
 
     )

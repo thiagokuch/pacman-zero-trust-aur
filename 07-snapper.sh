@@ -24,10 +24,17 @@ create_snapshot() {
 
     log_info "Creating snapper snapshot..."
 
-    snapper create \
+    if ! command snapper create \
         --type pre \
         --description "$DESCRIPTION" \
         >/dev/null
+    then
+
+        log_error "Unable to create snapshot"
+
+        return 1
+
+    fi
 
 }
 
@@ -37,10 +44,17 @@ create_snapshot() {
 
 get_last_snapshot_id() {
 
-    has_snapper || return
+    has_snapper || return 1
 
-    snapper list |
-        awk 'END{print $1}'
+    command snapper list |
+        awk '
+            NF > 0 && $1 ~ /^[0-9]+$/ {
+                ID=$1
+            }
+            END {
+                print ID
+            }
+        '
 
 }
 
@@ -52,14 +66,21 @@ save_snapshot_id() {
 
     local PKG="$1"
     local SNAPSHOT_ID="$2"
-
     local FILE
+
+    [[ -n "$SNAPSHOT_ID" ]] || return 1
 
     FILE="$(get_approved_state_file "$PKG")"
 
-    [[ -f "$FILE" ]] || return
+    [[ -f "$FILE" ]] || return 1
 
-    echo "SNAPSHOT_ID=\"$SNAPSHOT_ID\"" >> "$FILE"
+    command sed \
+        -i \
+        '/^SNAPSHOT_ID=/d' \
+        "$FILE"
+
+    echo "SNAPSHOT_ID=\"$SNAPSHOT_ID\"" \
+        >> "$FILE"
 
 }
 
@@ -69,7 +90,7 @@ save_snapshot_id() {
 
 show_snapshot_id() {
 
-    [[ -n "$SNAPSHOT_ID" ]] || return
+    [[ -n "${SNAPSHOT_ID:-}" ]] || return
 
     printf "%-25s %s\n" \
         "Snapshot ID:" \

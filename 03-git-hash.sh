@@ -3,56 +3,6 @@
 # =====================================================
 
 # =====================================================
-# CLONE PACKAGE
-# =====================================================
-
-aur_clone() {
-
-    local PKG="$1"
-    local TMP_DIR="$2"
-
-    if ! git clone \
-        "https://aur.archlinux.org/${PKG}.git" \
-        "$TMP_DIR/$PKG" \
-        >/dev/null 2>/tmp/pacman-zta-clone.log
-    then
-
-        log_error "Unable to clone $PKG"
-
-        echo
-        echo "Git output:"
-        cat /tmp/pacman-zta-clone.log
-        echo
-
-        add_hard_failure \
-            "Unable to clone package repository"
-
-        return 1
-
-    fi
-
-}
-
-# =====================================================
-# ENTER PACKAGE DIRECTORY
-# =====================================================
-
-enter_package_dir() {
-
-    local PKG="$1"
-    local TMP_DIR="$2"
-
-    cd "$TMP_DIR/$PKG" || {
-
-        log_error "Unable to enter package directory"
-
-        return 1
-
-    }
-
-}
-
-# =====================================================
 # PACKAGE AGE
 # =====================================================
 
@@ -62,13 +12,15 @@ get_package_age_days() {
     local NOW
 
     FIRST_COMMIT=$(
-        git log \
+        command git \
+            -C "$(get_package_dir)" \
+            log \
             --reverse \
             --format='%ct' |
             head -n1
     )
 
-    NOW=$(date +%s)
+    NOW="$(date +%s)"
 
     echo $(( (NOW - FIRST_COMMIT) / 86400 ))
 
@@ -80,7 +32,11 @@ get_package_age_days() {
 
 get_commit_count() {
 
-    git rev-list --count HEAD
+    command git \
+        -C "$(get_package_dir)" \
+        rev-list \
+        --count \
+        HEAD
 
 }
 
@@ -90,7 +46,10 @@ get_commit_count() {
 
 get_last_commit_hash() {
 
-    git rev-parse HEAD
+    command git \
+        -C "$(get_package_dir)" \
+        rev-parse \
+        HEAD
 
 }
 
@@ -100,6 +59,24 @@ get_last_commit_hash() {
 
 get_last_commit_date() {
 
-    git log -1 --format='%cs'
+    command git \
+        -C "$(get_package_dir)" \
+        log \
+        -1 \
+        --format='%cs'
+
+}
+
+# =====================================================
+# CURRENT MAINTAINER
+# =====================================================
+
+get_current_maintainer() {
+
+    command git \
+        -C "$(get_package_dir)" \
+        log \
+        -1 \
+        --format='%an'
 
 }

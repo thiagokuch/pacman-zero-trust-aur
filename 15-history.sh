@@ -8,17 +8,33 @@
 
 get_last_state_file() {
 
-    local PKG="$1"
-
-    echo "$STATE_DIR/${PKG}.last.state"
+    echo "$STATE_DIR/${CURRENT_PACKAGE}.last.state"
 
 }
 
 get_approved_state_file() {
 
-    local PKG="$1"
+    echo "$STATE_DIR/${CURRENT_PACKAGE}.approved.state"
 
-    echo "$STATE_DIR/${PKG}.approved.state"
+}
+
+# =====================================================
+# STATE VALUE
+# =====================================================
+
+get_state_value() {
+
+    local FILE="$1"
+    local KEY="$2"
+
+    [[ -f "$FILE" ]] || return
+
+    command grep \
+        "^${KEY}=" \
+        "$FILE" |
+    head -n1 |
+    cut -d= -f2- |
+    tr -d '"'
 
 }
 
@@ -28,10 +44,9 @@ get_approved_state_file() {
 
 load_package_state() {
 
-    local PKG="$1"
     local STATE_FILE
 
-    STATE_FILE="$(get_approved_state_file "$PKG")"
+    STATE_FILE="$(get_approved_state_file)"
 
     LAST_AUDIT="never"
     LAST_HASH=""
@@ -42,8 +57,41 @@ load_package_state() {
 
     [[ -f "$STATE_FILE" ]] || return 0
 
-    # shellcheck disable=SC1090
-    source "$STATE_FILE"
+    LAST_AUDIT="$(
+        get_state_value \
+            "$STATE_FILE" \
+            LAST_AUDIT
+    )"
+
+    LAST_HASH="$(
+        get_state_value \
+            "$STATE_FILE" \
+            LAST_HASH
+    )"
+
+    LAST_COMMITS="$(
+        get_state_value \
+            "$STATE_FILE" \
+            LAST_COMMITS
+    )"
+
+    LAST_MAINTAINER="$(
+        get_state_value \
+            "$STATE_FILE" \
+            LAST_MAINTAINER
+    )"
+
+    LAST_SCORE="$(
+        get_state_value \
+            "$STATE_FILE" \
+            LAST_SCORE
+    )"
+
+    SNAPSHOT_ID="$(
+        get_state_value \
+            "$STATE_FILE" \
+            SNAPSHOT_ID
+    )"
 
 }
 
@@ -53,10 +101,9 @@ load_package_state() {
 
 save_last_state() {
 
-    local PKG="$1"
     local STATE_FILE
 
-    STATE_FILE="$(get_last_state_file "$PKG")"
+    STATE_FILE="$(get_last_state_file)"
 
     cat > "$STATE_FILE" <<EOF
 LAST_AUDIT="$CURRENT_AUDIT_TIME"
@@ -74,10 +121,9 @@ EOF
 
 save_approved_state() {
 
-    local PKG="$1"
     local STATE_FILE
 
-    STATE_FILE="$(get_approved_state_file "$PKG")"
+    STATE_FILE="$(get_approved_state_file)"
 
     cat > "$STATE_FILE" <<EOF
 LAST_AUDIT="$CURRENT_AUDIT_TIME"
@@ -130,7 +176,7 @@ show_previous_score() {
 
 show_snapshot_id() {
 
-    [[ -z "$SNAPSHOT_ID" ]] && return
+    [[ -n "${SNAPSHOT_ID:-}" ]] || return
 
     printf "%-25s %s\n" \
         "Snapshot ID:" \
